@@ -46,7 +46,7 @@ You have the option to select a dataset from a set of available options includin
 ```sh
 python main.py --dataSet "CiteSeer"
 ```
-Although we've provided the CiteSeer dataset due to space constraints, you can access all the datasets through the provided link. 
+Although we've provided the CiteSeer dataset due to space constraints, you can access all the datasets through [this link](www.google.com). 
 
 ## Environment
 - python=3.8
