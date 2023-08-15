@@ -4,7 +4,13 @@
 This is a PyTorch implementation of Joint Link Prediction via Variational Graph Auto-Encoder in a graph.
 ## Overview
 A Joint Link Prediction Query (JLPQ) asks for the probability of a target set of links, given an evidence set of links and node attributes. Supporting inference to answer JLPQs is a new use case for a Graph Generative Model (GGM). Such a query answering system facilitates applying graph prediction in a production environment where multiple users pose a range of queries to be answered. In this paper we showed inference from a trained Variational Graph Auto-Encoder (VGAE) model can be used to answer JLPQs, in zero-shot manner without retraining the model. The key issue is how to apply a graph encoder when some links are unspecified by the query. For more information you can see our paper ["Joint Link Prediction Via Inference from a Model"](www.google.com).
-To ask different types of joint link prediction queries, you will need to adjust the command in order to execute the code.
+
+## Run
+To execute the main.py file, run the model, and address the joint link prediction queries, you must customize the parameters within the command.
+For example this command runs the code in Fully inductive setting, with Monte Carlo sampling, GAT encoder for single link prediction on Cora dataset:
+```sh
+python main.py --fully_inductive True --encoder_type "Multi_GAT" --sampling_method "monte" --method "single" --dataSet "Cora" 
+```
 
 
 ## Semi/Fully Inductive Setting
@@ -16,11 +22,11 @@ python main.py --fully_inductive True
 Or you can run the model in semi inductive setting where, Each target link connects at least one test node. The evidence set comprises all links from the input graph that are not target links. By default, the model operates in the semi-inductive setting.
 ## Encoder Types
 You can run this model with three different encoders by using following commands:
-- **VGAE-GCN** Graph Convolutional Neural Network is a popular encoder:
+- [**VGAE-GCN**](https://openreview.net/pdf?id=SJU4ayYgl) Graph Convolutional Neural Network is a popular encoder:
     - ```python main.py --encoder_type "Multi_GCN"```
-- **VGAE-GAT** Graph Attention Networks add link attention weights to graph convolutions:
+- [**VGAE-GAT**](https://openreview.net/forum?id=rJXMpikCZ) Graph Attention Networks add link attention weights to graph convolutions:
     - ```python main.py --encoder_type "Multi_GAT" ```
-- **VGAE-GIN** The Graph Isomorphism Network is a type of GNN that consists of two steps of         aggregation and combination:
+- [**VGAE-GIN**](https://openreview.net/pdf?id=ryGs6iA5Km) The Graph Isomorphism Network is a type of GNN that consists of two steps of         aggregation and combination:
     - ```python main.py --encoder_type "Multi_GIN" ```
 
 
