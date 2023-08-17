@@ -48,7 +48,7 @@ This model can answer two types of queries:
 
 
 ## Data
-You have the option to select a dataset from a set of available options including Cora, ACM, IMDb, CiteSeer, Photo, and Computers datasets. To use a specific dataset, you can execute the following command:
+You have the option to select a dataset from a set of available options such as Cora and CiteSeer datasets. To use a specific dataset, you can execute the following command:
 ```sh
 python main.py --dataSet "CiteSeer"
 ```
