@@ -1,7 +1,7 @@
 # Joint Link Prediction Via Inference from a Model
 **Authors**: Parmis Naddaf, Erfaneh Mahmoudzadeh Ahmadi Nejad, Kiarash Zahirnia, Manfred Jaeger, Oliver Schulte
 
-This is a PyTorch implementation of Joint Link Prediction via Variational Graph Auto-Encoder in a graph.
+This is a PyTorch implementation of Joint Link Prediction Via Inference from a Model.
 ## Overview
 A Joint Link Prediction Query (JLPQ) asks for the probability of a target **set of links**, given an evidence set of links and node attributes. Supporting inference to answer JLPQs is a new use case for a Graph Generative Model (GGM). Such a query answering system facilitates applying graph prediction in a production environment where multiple users pose a range of queries to be answered. In this paper we showed inference from a trained Variational Graph Auto-Encoder (VGAE) model can be used to answer JLPQs, in zero-shot manner without retraining the model. The key issue is how to apply a graph encoder when some links are unspecified by the query. For more information you can see our paper ["Joint Link Prediction Via Inference from a Model"](www.google.com).
 
