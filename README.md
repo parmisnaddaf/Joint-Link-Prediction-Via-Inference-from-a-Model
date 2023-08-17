@@ -1,4 +1,4 @@
-# Joint-Link-Prediction-Via-Inference-from-a-Model
+# Joint Link Prediction Via Inference from a Model
 **Authors**: Parmis Naddaf, Erfaneh Mahmoudzadeh Ahmadi Nejad, Kiarash Zahirnia, Manfred Jaeger, Oliver Schulte
 
 This is a PyTorch implementation of Joint Link Prediction via Variational Graph Auto-Encoder in a graph.
