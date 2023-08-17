@@ -70,7 +70,7 @@ class DataCenter():
 
 
 
-        if dataSet == 'citeseer':
+        if dataSet == 'CiteSeer':
             names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
             objects = []
             for i in range(len(names)):
