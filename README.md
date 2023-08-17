@@ -3,7 +3,7 @@
 
 This is a PyTorch implementation of Joint Link Prediction via Variational Graph Auto-Encoder in a graph.
 ## Overview
-A Joint Link Prediction Query (JLPQ) asks for the probability of a target set of links, given an evidence set of links and node attributes. Supporting inference to answer JLPQs is a new use case for a Graph Generative Model (GGM). Such a query answering system facilitates applying graph prediction in a production environment where multiple users pose a range of queries to be answered. In this paper we showed inference from a trained Variational Graph Auto-Encoder (VGAE) model can be used to answer JLPQs, in zero-shot manner without retraining the model. The key issue is how to apply a graph encoder when some links are unspecified by the query. For more information you can see our paper ["Joint Link Prediction Via Inference from a Model"](www.google.com).
+A Joint Link Prediction Query (JLPQ) asks for the probability of a target **set of links**, given an evidence set of links and node attributes. Supporting inference to answer JLPQs is a new use case for a Graph Generative Model (GGM). Such a query answering system facilitates applying graph prediction in a production environment where multiple users pose a range of queries to be answered. In this paper we showed inference from a trained Variational Graph Auto-Encoder (VGAE) model can be used to answer JLPQs, in zero-shot manner without retraining the model. The key issue is how to apply a graph encoder when some links are unspecified by the query. For more information you can see our paper ["Joint Link Prediction Via Inference from a Model"](www.google.com).
 
 ## Run
 To execute the main.py file, run the model, and address the joint link prediction queries, you must customize the parameters within the command.
@@ -41,9 +41,9 @@ During the inference step, you can choose from three available sampling methods.
 
 ## Single/Multi Link Prediction
 This model can answer two types of queries:
-- **Single Link Queries**, where each query has one target edge:
+- **Single Link Queries**, where each query has one target edge. This is the traditional link prediction setup.
     - ```python main.py --method "single" ```
-- **Joint Link Prediction Queries**, where each query has at least one target edge:
+- **Joint Link Prediction Queries**, where each query has at least one target edge. This is the novel task considered in our paper.
     - ```python main.py --method "multi" ```
 
 
