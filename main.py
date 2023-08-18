@@ -47,23 +47,23 @@ parser = argparse.ArgumentParser(description='Inductive')
 parser.add_argument('-e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
 parser.add_argument('--dataSet', type=str, default='Cora')
 parser.add_argument('--seed', type=int, default=123)
-parser.add_argument('-num_node', dest="num_node", default=-1, type=str,
+parser.add_argument('--num_node', dest="num_node", default=-1, type=str,
                     help="the size of subgraph which is sampled; -1 means use the whole graph")
-parser.add_argument('-decoder_type', dest="decoder_type", default="ML_SBM",help="the decoder type")
-parser.add_argument('-encoder_type', dest="encoder_type", default="Multi_GIN",
+parser.add_argument('--decoder_type', dest="decoder_type", default="ML_SBM",help="the decoder type")
+parser.add_argument('--encoder_type', dest="encoder_type", default="Multi_GIN",
                     help="the encoder type, Either Multi_GIN, Multi_GCN, Multi_GAT")
-parser.add_argument('-NofRels', dest="num_of_relations", default=1,
+parser.add_argument('--NofRels', dest="num_of_relations", default=1,
                     help="Number of latent or known relation; number of deltas in SBM")
-parser.add_argument('-NofCom', dest="num_of_comunities", default=128,
+parser.add_argument('--NofCom', dest="num_of_comunities", default=128,
                     help="Number of comunites, tor latent space dimention; len(z)")
 parser.add_argument('-BN', dest="batch_norm", default=True,
                     help="either use batch norm at decoder; only apply in multi relational decoders")
-parser.add_argument('-DR', dest="DropOut_rate", default=.3, help="drop out rate")
-parser.add_argument('-encoder_layers', dest="encoder_layers", default="64", type=str,
+parser.add_argument('--DR', dest="DropOut_rate", default=.3, help="drop out rate")
+parser.add_argument('--encoder_layers', dest="encoder_layers", default="64", type=str,
                     help="a list in which each element determine the size of gcn; Note: the last layer size is determine with -NofCom")
-parser.add_argument('-lr', dest="lr", default=0.01, help="model learning rate")
-parser.add_argument('-is_prior', dest="is_prior", default=False, help="This flag is used for sampling methods")
-parser.add_argument('-targets', dest="targets", default=[], help="This list is used for sampling")
+parser.add_argument('--lr', dest="lr", default=0.01, help="model learning rate")
+parser.add_argument('--is_prior', dest="is_prior", default=False, help="This flag is used for sampling methods")
+parser.add_argument('--targets', dest="targets", default=[], help="This list is used for sampling")
 parser.add_argument('--fully_inductive', dest="fully_inductive", default=False,
                     help="This flag is used if want to have fully o semi inductive link prediction")
 parser.add_argument('--sampling_method', dest="sampling_method", default="importance_sampling", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
