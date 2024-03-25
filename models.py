@@ -9,6 +9,10 @@ from utils import *
 from dgl.nn.pytorch import GraphConv as GraphConv
 from dgl.nn.pytorch import GATConv as GATConv
 from dgl.nn import GINConv as GINConv
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+from sklearn.multiclass import OneVsRestClassifier
+
 
 from torch.autograd import Variable
 from torch.nn import init
@@ -16,9 +20,6 @@ import time
 import csv
 
 import numpy as np
-from scipy.stats import multivariate_normal
-from torch.nn.functional import normalize
-
 
 global haveedge
 haveedge = False
@@ -114,6 +115,7 @@ class multi_layer_GIN(torch.nn.Module):
         :param layers: a list in which each element determine the size of corresponding GCNN Layer.
         """
         super(multi_layer_GIN, self).__init__()
+        # torch.manual_seed(123)
         layers = [in_feature] + layers
         if len(layers) < 1: raise Exception("sorry, you need at least two layer")
         self.ConvLayers = torch.nn.ModuleList(
@@ -125,6 +127,7 @@ class multi_layer_GIN(torch.nn.Module):
         self.q_z_std = GINConv(th.nn.Linear(in_feature, latent_dim), 'max')
 
     def forward(self, adj, x):
+        # torch.manual_seed(123)
         dropout = torch.nn.Dropout(0)
         for conv_layer in self.ConvLayers:
             x = torch.tanh(conv_layer(adj, x))
@@ -134,7 +137,7 @@ class multi_layer_GIN(torch.nn.Module):
         std_q_z = torch.relu(self.q_z_std(adj, x)) + .0001
 
         z = self.reparameterize(m_q_z, std_q_z)
-        return z, m_q_z, std_q_z,
+        return z, m_q_z, std_q_z
 
     def reparameterize(self, mean, std):
         eps = torch.randn_like(std)
@@ -216,7 +219,7 @@ class MultiLatetnt_SBM_decoder(torch.nn.Module):
 
 
 class VGAE_FrameWork(torch.nn.Module):
-    def __init__(self, latent_dim, encoder, decoder, feature_encoder, mlp_decoder=False, layesrs=None):
+    def __init__(self, latent_dim, encoder, decoder, feature_decoder, feature_encoder, classifier, mlp_decoder=False, layesrs=None):
         """
         :param latent_dim: the dimention of each embedded node; |z| or len(z)
         :param decoder:
@@ -229,6 +232,8 @@ class VGAE_FrameWork(torch.nn.Module):
         self.leakyRelu = nn.LeakyReLU()
         self.latent_dim = latent_dim
         self.feature_encoder = feature_encoder
+        self.feature_decoder = feature_decoder
+        self.classifier = classifier
         self.mq = None
         self.sq = None
 
@@ -238,33 +243,38 @@ class VGAE_FrameWork(torch.nn.Module):
         self.dropout = torch.nn.Dropout(0)
         self.reset_parameters()
 
-    def forward(self, adj, x, target_edges, sampling_method, is_prior, train=True):
-        z_0 = self.get_z(x, self.latent_dim)  # attribute encoder
+    def forward(self, adj, x, labels, targets, sampling_method, is_prior, train=True):
+
+        z_0 = self.generate_feature_vec(x, adj, self.latent_dim)  # attribute encoder
         z, m_z, std_z = self.inference(adj, z_0)  # link encoder
         generated_adj = self.generator(z)  # link decoder
-            
+        generated_feat = self.generator_feat(z) # feature decoder
+        generated_classes = self.classifier(z) # node classifier
+        torch.save(z, "CiteSeer_embeddings.pt")
         if not train:
-            z_0 = self.get_z(x, self.latent_dim)  # attribute encoder
+            z_0 = self.generate_feature_vec(x, adj, self.latent_dim)  # attribute encoder
             z, m_z, std_z = self.inference(adj, z_0)  # link encoder
 
             generated_adj = self.generator(z)  # link decoder
+            generated_feat = self.generator_feat(z)  # feature decoder
+            generated_classes = self.classifier(z)  # node classifier
 
             if is_prior:
                 
                 if sampling_method == "normalized":
 
-                    A0 = self.run_monte(generated_adj, x, adj, target_edges)
-                    A1 = self.run_importance_sampling(generated_adj, x, adj, target_edges)
+                    A0 = self.run_monte(generated_adj, x, adj, targets)
+                    A1 = self.run_importance_sampling(generated_adj, x, adj, targets)
                     
                     # get softmax and return
                     generated_adj = torch.exp(A1) / (torch.exp(A0) + torch.exp(A1))
 
 
                 elif sampling_method=='monte':
-                    generated_adj = self.run_monte(generated_adj, x, adj, target_edges)
+                    generated_adj= self.run_monte(generated_adj, x, adj, targets)
                     
                 elif sampling_method == 'importance_sampling':
-                    generated_adj = self.run_importance_sampling(generated_adj, x, adj, target_edges)
+                    generated_adj = self.run_importance_sampling(generated_adj, x, adj, targets)
                     
                 else: 
                     # deterministic
@@ -274,7 +284,9 @@ class VGAE_FrameWork(torch.nn.Module):
                 self.mq = m_z
                 self.sq = std_z
 
-        return std_z, m_z, z, generated_adj
+
+
+        return std_z, m_z, z, generated_adj, generated_feat, generated_classes
 
     def run_monte(self, generated_adj, x, adj, targets):
         
@@ -284,13 +296,14 @@ class VGAE_FrameWork(torch.nn.Module):
         target_edges = np.stack((targets, target_node), axis=1)[:-1]
         
         s = generated_adj
+
         num_it = 30
         for i in range(num_it - 1):
             z_0 = self.get_z(x, self.latent_dim)  # attribute encoder
             z, m_z, std_z = self.inference(adj, z_0)
             generated_adj = self.generator(z)
             s += generated_adj
-            
+
         generated_adj = s / num_it
 
         return generated_adj
@@ -364,34 +377,118 @@ class VGAE_FrameWork(torch.nn.Module):
         adj = self.decoder(z)
         return adj
 
+    def generator_feat(self, z):
+        # apply chain of mlp on nede embedings
+        # z = self.embedding_level_mlp(z)
+        features = self.feature_decoder(z)
+        return features
+
     def get_z(self, x, latent_dim):
         """Encode a batch of data points, x, into their z representations."""
 
         return self.feature_encoder(x)
 
 
+    def generate_feature_vec(self, x, latent_dim, adj):
+        embedding = self.get_z(x, latent_dim)
+        # pca = torch.pca_lowrank(x, q=128, center=True, niter=2)
+        # embedding_pca_avg = (embedding+pca[0])/2
+        # embedding_pca_cat = torch.cat((embedding, pca[0]), 1)
+        # DEAL_encoder = torch.load("/Users/erfanehmahmoudzadeh/Desktop/lesson/research/DEAL/DEAL_old/model/model_Cora.pth")
+
+        return embedding
+
 class feature_encoder(torch.nn.Module):
-    def __init__(self, in_feature, latent_dim=128):
+    # def __init__(self, in_feature, latent_dim=128):
+    #     # torch.manual_seed(123)
+    #     """
+    #     :param in_feature: the size of input feature; X.shape()[1]
+    #     :param latent_dim: the dimention of each embedded node; |z| or len(z)
+    #     :param layers: a list in which each element determine the size of corresponding GCNN Layer.
+    #     """
+    #     super(feature_encoder, self).__init__()
+    #     self.leakyRelu = nn.LeakyReLU()
+    #
+    #     self.std = nn.Linear(in_features=in_feature.shape[1], out_features=latent_dim)
+    #     self.mean = nn.Linear(in_features=in_feature.shape[1], out_features=latent_dim)
+    #
+    #
+    # def forward(self, x):
+    #     # torch.manual_seed(123)
+    #     x = normalize(x, p=1.0, dim = 1)
+    #     m_q_z = self.mean(x)
+    #     std_q_z = torch.relu(self.std(x)) + .0001
+    #
+    #     z = self.reparameterize(m_q_z, std_q_z)
+    #
+    #     return z
+    def __init__(self, input_size, hidden_size=128, output_size=128, dropout_rate=0.5):
+        super(feature_encoder, self).__init__()
+        self.fc1 = nn.Linear(input_size.shape[1], hidden_size)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout_rate)
+        self.fc2 = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
+    def reparameterize(self, mean, std):
+        # torch.manual_seed(123)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add(mean)
+
+class feature_decoder_nn(torch.nn.Module):
+    def __init__(self, out_feature, latent_dim=128):
         """
         :param in_feature: the size of input feature; X.shape()[1]
         :param latent_dim: the dimention of each embedded node; |z| or len(z)
         :param layers: a list in which each element determine the size of corresponding GCNN Layer.
         """
-        super(feature_encoder, self).__init__()
+        super(feature_decoder_nn, self).__init__()
         self.leakyRelu = nn.LeakyReLU()
+        self.layer1 = nn.Linear(in_features=latent_dim, out_features=out_feature)
+        # self.layer2 = nn.Linear(in_features=(int(latent_dim/2)), out_features=out_feature)
 
-        self.std = nn.Linear(in_features=in_feature.shape[1], out_features=latent_dim)
-        self.mean = nn.Linear(in_features=in_feature.shape[1], out_features=latent_dim)
+    def forward(self, z):
+        # no sigmoid for features since BCE has sigmoid
+        re_feature = self.layer1(z)
 
+        return re_feature
+
+class MulticlassClassifier(nn.Module):
+    def __init__(self, output_dim, input_dim=128):
+        super(MulticlassClassifier, self).__init__()
+        self.hidden_layer_1 = nn.Linear(input_dim,int(input_dim/2))
+        self.hidden_layer_2 = nn.Linear(int(input_dim / 2), int(input_dim / 4))
+        self.classifier = nn.Linear(int(input_dim/4), output_dim)
+        self.relu = nn.ReLU()
+        self.dp = nn.Dropout(p=0.2)
 
     def forward(self, x):
-        x = normalize(x, p=1.0, dim = 1)
-        m_q_z = self.mean(x)
-        std_q_z = torch.relu(self.std(x)) + .0001
+        x = self.hidden_layer_1(x)
+        x = self.relu(x)
+        x = self.hidden_layer_2(x)
+        x = self.relu(x)
+        x = self.dp(x)
+        x = self.classifier(x)
+        return torch.softmax(x, dim=-1)
 
-        z = self.reparameterize(m_q_z, std_q_z)
-        return z
+class LabelClassifier(nn.Module):
+    def __init__(self):
+        super(LabelClassifier, self).__init__()
+        logreg = LogisticRegression(solver='liblinear')
+        c = 2.0 ** np.arange(-10, 10)
+        self.clf = GridSearchCV(estimator=OneVsRestClassifier(logreg),
+                           param_grid=dict(estimator__C=c), n_jobs=4, cv=5,
+                           verbose=0)
+    def forward(self, X_train, y_train, X_test):
+        self.clf.fit(X_train, y_train)
+        y_pred = self.clf.predict_proba(X_test)
+        y_pred = prob_to_one_hot(y_pred)
+        return y_pred
 
-    def reparameterize(self, mean, std):
-        eps = torch.randn_like(std)
-        return eps.mul(std).add(mean)
+

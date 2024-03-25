@@ -1,0 +1,7 @@
+metrics,ours-BCE,ours-MSE,DEAL_emb,MAE_emb,DEAL_emb_x,MAE_emb_x,DEAL_decoder,MAE_decoder
+AUC,0.89,0.89,0.50,0.50,0.60,0.84,,
+Accuracy,0.45,0.49,0.00,0.00,0.00,0.23,,
+AP,0.50,0.50,0.13,0.14,0.15,0.33,,
+Precision,0.66,0.63,0.18,0.11,0.23,0.53,,
+Recall,0.86,0.88,0.99,0.32,0.91,0.84,,
+F1-score,0.51,0.52,0.01,0.04,0.07,0.30,,

@@ -1,0 +1,6 @@
+metrics,DEAL,VGAE
+AUC,0.766,0.95
+AP,0.846,0.93
+Precision,1,0.95
+Recall,0.206,0.72
+HR,1,0.95

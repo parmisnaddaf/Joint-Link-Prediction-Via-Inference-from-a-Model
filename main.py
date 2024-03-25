@@ -45,7 +45,12 @@ warnings.simplefilter('ignore')
 parser = argparse.ArgumentParser(description='Inductive')
 
 parser.add_argument('--e', type=int, dest="epoch_number", default=100, help="Number of Epochs")
-parser.add_argument('--dataSet', type=str, default='Cora')
+parser.add_argument('--dataSet', type=str, default="Cora")
+parser.add_argument('--loss_type', dest="loss_type", default="1", help="type of combination between loss_A and loss_F")
+parser.add_argument('--sampling_method', dest="sampling_method", default="monte", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
+parser.add_argument('--method', dest="method", default="multi", help="This var shows method it could be: multi, single")
+
+
 parser.add_argument('--seed', type=int, default=123)
 parser.add_argument('--num_node', dest="num_node", default=-1, type=str,
                     help="the size of subgraph which is sampled; -1 means use the whole graph")
@@ -66,14 +71,12 @@ parser.add_argument('--is_prior', dest="is_prior", default=False, help="This fla
 parser.add_argument('--targets', dest="targets", default=[], help="This list is used for sampling")
 parser.add_argument('--fully_inductive', dest="fully_inductive", default=False,
                     help="This flag is used if want to have fully o semi inductive link prediction")
-parser.add_argument('--sampling_method', dest="sampling_method", default="importance_sampling", help="This var shows sampling method it could be: monte, importance_sampling, deterministic")
-parser.add_argument('--method', dest="method", default="single", help="This var shows method it could be: multi, single")
 
 
 args = parser.parse_args()
 fully_inductive = args.fully_inductive
 if fully_inductive:
-    save_recons_adj_name =args.encoder_type[-3:] + "_" + args.sampling_method + "_fully_" + args.method + "_" + args.dataSet
+    save_recons_adj_name = args.encoder_type[-3:] + "_" + args.sampling_method + "_fully_" + args.method + "_" + args.dataSet
 else:
     save_recons_adj_name = args.encoder_type[-3:] + "_" + args.sampling_method + "_semi_" + args.method + "_" + args.dataSet
 
@@ -101,6 +104,8 @@ dataCenter = DataCenter()
 dataCenter.load_dataSet(ds)
 adj_list = sparse.csr_matrix(getattr(dataCenter, ds + '_adj_lists'))
 features = torch.FloatTensor(getattr(dataCenter, ds + '_feats'))
+labels = torch.FloatTensor(getattr(dataCenter, ds + '_labels')).to(device)
+
 org_adj = adj_list.toarray()
 
 
@@ -124,6 +129,13 @@ precision_list = []
 recall_list = []
 HR_list = []
 
+auc_list_label = []
+acc_list_label = []
+ap_list_label = []
+precision_list_label = []
+recall_list_label = []
+F1_list_label = []
+
 
 method = args.method
 if method=='multi':
@@ -139,7 +151,12 @@ elif method == 'single':
 
 pred_single_link = []
 true_single_link = []
+pred_single_label = []
+true_single_label = []
+pred_multi_label = []
+true_multi_label = []
 targets = []
+target_ids = []
 sampling_method = args.sampling_method
 
 if fully_inductive:
@@ -151,7 +168,7 @@ if fully_inductive:
     org_adj[i_list, j_list] = 0  # set all the in between edges to 0
 
 # run recognition separately for the case of single_link
-std_z_recog, m_z_recog, z_recog, re_adj_recog = run_network(features, org_adj, inductive_model, targets, sampling_method,
+std_z_recog, m_z_recog, z_recog, re_adj_recog, re_feat_recog, re_recog_labels = run_network(features, org_adj, labels, inductive_model, targets, sampling_method,
                                                             is_prior=False)
 
 
@@ -163,6 +180,7 @@ sample_list = random.sample(range(0, len(idd_list)), 100)
 
 # run prior network separately
 counter = 0
+target_edges = []
 for i in sample_list:
     print(counter)
     counter+= 1
@@ -171,6 +189,7 @@ for i in sample_list:
     neighbour_id = neighbour_list[i]
     adj_list_copy = copy.deepcopy(org_adj)
     neigbour_prob_single = 1
+
     if single_link:
 
         adj_list_copy = copy.deepcopy(org_adj)
@@ -179,33 +198,44 @@ for i in sample_list:
 
         targets.append(idd)
         targets.append(neighbour_id)
+        target_edges.append([idd, neighbour_id])
+        target_edges.append([neighbour_id, idd])
+        target_ids.append(idd)
+        target_ids.append(neighbour_id)
 
 
         # run prior
+        std_z_prior, m_z_prior, z_prior, re_adj_prior, re_feat_prior, re_prior_labels = run_network(features,
+                                                                                                    adj_list_copy,
+                                                                                                    labels,
+                                                                                                    inductive_model,
+                                                                                                    targets,
+                                                                                                    sampling_method,
+                                                                                                    is_prior=True)
 
-        std_z_prior, m_z_prior, z_prior, re_adj_prior = run_network(features, adj_list_copy, inductive_model,
-                                                                    targets, sampling_method,  is_prior=True)
         re_adj_prior_sig = torch.sigmoid(re_adj_prior)
+        re_label_prior_sig = torch.sigmoid(re_prior_labels)
         pred_single_link.append(re_adj_prior_sig[idd, neighbour_id].tolist())
         true_single_link.append(org_adj[idd, neighbour_id].tolist())
-
+        pred_single_label.append(re_label_prior_sig[idd])
+        true_single_label.append(labels[idd])
 
     if multi_link:
-        adj_list_copy_1 = copy.deepcopy(org_adj)
-        # if we want to set all potential edges to 1
-        if fully_inductive: # only set the edges among the idd and other test nodes to 1
-            adj_list_copy_1[idd, testId] = 1
-            adj_list_copy_1[testId, idd] = 1
-        else: # set all edges among the idd and other nodes to 1
-            adj_list_copy_1[idd, :] = 1
-            adj_list_copy_1[:, idd] = 1
-
-
-
-        # run recoginition to update mq and sq
-        std_z_recog, m_z_recog, z_recog, re_adj_recog = run_network(features, adj_list_copy_1, inductive_model, [], sampling_method,
-                                                                    is_prior=False)
-
+        # adj_list_copy_1 = copy.deepcopy(org_adj)
+        # # if we want to set all potential edges to 1
+        # if fully_inductive: # only set the edges among the idd and other test nodes to 1
+        #     adj_list_copy_1[idd, testId] = 1
+        #     adj_list_copy_1[testId, idd] = 1
+        # else: # set all edges among the idd and other nodes to 1
+        #     adj_list_copy_1[idd, :] = 1
+        #     adj_list_copy_1[:, idd] = 1
+        #
+        #
+        #
+        # # run recoginition to update mq and sq
+        # std_z_recog, m_z_recog, z_recog, re_adj_recog = run_network(features, adj_list_copy_1, inductive_model, [], sampling_method,
+        #                                                             is_prior=False)
+        #
 
 
         true_multi_links = org_adj[idd].nonzero()
@@ -216,8 +246,9 @@ for i in sample_list:
         target_list = np.array(target_list)
 
 
-        targets = list(true_multi_links[0])
-        targets.extend(list(false_multi_links))
+        # targets = list(true_multi_links[0])
+        # targets.extend(list(false_multi_links))
+        targets = []
         targets.append(idd)
 
 
@@ -226,10 +257,15 @@ for i in sample_list:
         adj_list_copy = copy.deepcopy(org_adj)
         adj_list_copy[idd, :] = 0  # set all the neigbours to 0
         adj_list_copy[:, idd]  = 0  # set all the neigbours to 0
-        std_z_prior, m_z_prior, z_prior, re_adj_prior = run_network(features, adj_list_copy, inductive_model,
-                                                                    targets, sampling_method, is_prior=True)
 
-
+        # run prior
+        std_z_prior, m_z_prior, z_prior, re_adj_prior, re_feat_prior, re_prior_labels = run_network(features,
+                                                                                                    adj_list_copy,
+                                                                                                    labels,
+                                                                                                    inductive_model,
+                                                                                                    targets,
+                                                                                                    sampling_method,
+                                                                                                    is_prior=True)
 
 
         ######################################################
@@ -263,13 +299,25 @@ for i in sample_list:
         # re_adj_prior = torch.exp(re_adj_prior_1) / (torch.exp(re_adj_prior) + torch.exp(re_adj_prior_1))
         #########################################################
 
-        auc, val_acc, val_ap, precision, recall, HR = get_metrics(target_list, org_adj, re_adj_prior)
+        re_adj_prior_sig = torch.sigmoid(re_adj_prior)
+        re_label_prior_sig = torch.sigmoid(re_prior_labels)
+        pred_multi_label.append(re_label_prior_sig[idd])
+        true_multi_label.append(labels[idd])
+
+
+        auc, val_acc, val_ap, precision, recall, HR = get_metrics(target_list, org_adj, re_adj_prior_sig)
+        # auc_l, acc_l, ap_l, precision_l, recall_l, F1_score = roc_auc_estimator_labels(pred_multi_label, true_multi_label)
+
+
+
         auc_list.append(auc)
         acc_list.append(val_acc)
         ap_list.append(val_ap)
         precision_list.append(precision)
         recall_list.append(recall)
         HR_list.append(HR)
+
+
 
 
 
@@ -285,30 +333,44 @@ if single_link:
         idd = test_neg_edge[0]
         neighbour_id = test_neg_edge[1]
         adj_list_copy = copy.deepcopy(org_adj)
-        adj_list_copy[idd, neighbour_id] = 1
-        adj_list_copy[neighbour_id, idd] = 1
+        adj_list_copy[idd, neighbour_id] = 0
+        adj_list_copy[neighbour_id, idd] = 0
         targets.append(idd)
         targets.append(neighbour_id)
-
+        target_edges.append([idd, neighbour_id])
+        target_edges.append([neighbour_id, idd])
+        target_ids.append(idd)
+        target_ids.append(neighbour_id)
 
         # to update mq and sq for the case of importance_sampling
 
-        std_z_recog, m_z_recog, z_recog, re_adj_recog = run_network(features, adj_list_copy, inductive_model,
-                                                                    targets, sampling_method,
-                                                                    is_prior=False)
+        std_z_recog, m_z_recog, z_recog, re_adj_recog, re_feat_recog, re_recog_labels = run_network(features,
+                                                                                                    adj_list_copy,
+                                                                                                    labels,
+                                                                                                    inductive_model,
+                                                                                                    targets,
+                                                                                                    sampling_method,
+                                                                                                    is_prior=False)
 
-        std_z_prior, m_z_prior, z_prior, re_adj_prior = run_network(features, org_adj, inductive_model, targets,sampling_method,
-                                                                    is_prior=True)
+        std_z_prior, m_z_prior, z_prior, re_adj_prior, re_feat_prior, re_prior_labels = run_network(features, org_adj,
+                                                                                                    labels,
+                                                                                                    inductive_model,
+                                                                                                    targets,
+                                                                                                    sampling_method,
+                                                                                                    is_prior=True)
+
+
 
         re_adj_prior_sig = torch.sigmoid(re_adj_prior)
+        re_label_prior_sig = torch.sigmoid(re_prior_labels)
         pred_single_link.extend([re_adj_prior_sig[idd, neighbour_id].tolist()])
         true_single_link.extend([org_adj[idd, neighbour_id].tolist()])
-        re_adj_recog_sig = torch.sigmoid(re_adj_recog)
-        pred_single_link.extend(re_adj_recog_sig[test_neg_edges[:false_count, 0], test_neg_edges[:false_count, 1]].tolist())
-        true_single_link.extend(org_adj[test_neg_edges[:false_count, 0], test_neg_edges[:false_count, 1]].tolist())
-
+        pred_single_label.extend([re_label_prior_sig[idd]])
+        true_single_label.extend([labels[idd]])
 
     auc, val_acc, val_ap, precision, recall, HR = roc_auc_single(pred_single_link, true_single_link)
+    auc_l, acc_l, ap_l, precision_l, recall_l, F1_score = roc_auc_estimator_labels(pred_single_label, true_single_label,labels)
+
     auc_list.append(auc)
     acc_list.append(val_acc)
     ap_list.append(val_ap)
@@ -316,11 +378,54 @@ if single_link:
     recall_list.append(recall)
     HR_list.append(HR)
 
+    auc_list_label.append(auc_l)
+    acc_list_label.append(acc_l)
+    ap_list_label.append(ap_l)
+    precision_list_label.append(precision_l)
+    recall_list_label.append(recall_l)
+    F1_list_label.append(F1_score)
+
+if multi_link:
+    auc_l, acc_l, ap_l, precision_l, recall_l, F1_score = roc_auc_estimator_labels(pred_multi_label,
+                                                                                   true_multi_label, labels)
+    auc_list_label.append(auc_l)
+    acc_list_label.append(acc_l)
+    ap_list_label.append(ap_l)
+    precision_list_label.append(precision_l)
+    recall_list_label.append(recall_l)
+    F1_list_label.append(F1_score)
+
 
 # Print results
 if fully_inductive:
     save_recons_adj_name =args.encoder_type[-3:] + "_" + args.sampling_method + "_fully_" + args.method + "_" + args.dataSet
 else:
-    save_recons_adj_name = args.encoder_type[-3:] + "_" + args.sampling_method + "_semi_" + args.method + "_" + args.dataSet
+    save_recons_adj_name = args.encoder_type[
+                           -3:] + "_" + args.sampling_method + "_semi_" + args.method + "_" + args.dataSet
+
+
+save_recons_adj_name = save_recons_adj_name + "_" + args.loss_type
 print(save_recons_adj_name)
-print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , HR= %.3f" %(statistics.mean(auc_list), statistics.mean(acc_list), statistics.mean(ap_list), statistics.mean(precision_list), statistics.mean(recall_list), statistics.mean(HR_list)))
+print("Link Prediction")
+print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , HR= %.3f" % (
+statistics.mean(auc_list), statistics.mean(acc_list), statistics.mean(ap_list), statistics.mean(precision_list),
+statistics.mean(recall_list), statistics.mean(HR_list)))
+print("Node Classification")
+print("auc= %.3f , acc= %.3f ap= %.3f , precision= %.3f , recall= %.3f , F1_Score= %.3f" % (
+statistics.mean(auc_list_label), statistics.mean(acc_list_label), statistics.mean(ap_list_label),
+statistics.mean(precision_list_label), statistics.mean(recall_list_label), statistics.mean(F1_list_label)))
+
+with open('./results_csv/results.csv', 'a', newline="\n") as f:
+    writer = csv.writer(f)
+    writer.writerow(
+        [save_recons_adj_name, statistics.mean(auc_list), statistics.mean(acc_list), statistics.mean(ap_list),
+         statistics.mean(precision_list), statistics.mean(recall_list), statistics.mean(HR_list)])
+with open('./results_csv/results.csv', 'a', newline="\n") as f:
+    writer = csv.writer(f)
+    writer.writerow(["labels_" + save_recons_adj_name, statistics.mean(auc_list_label), statistics.mean(acc_list_label),
+                     statistics.mean(ap_list_label), statistics.mean(precision_list_label),
+                     statistics.mean(recall_list_label), statistics.mean(F1_list_label)])
+tr = torch.tensor(target_edges)
+tr_ids = torch.tensor((target_ids))
+torch.save(tr, args.dataSet+"_targets.pt")
+torch.save(tr_ids, args.dataSet+"_target_idss.pt")
